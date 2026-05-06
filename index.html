@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="UliTrace">
+  <title>UliTrace</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      user-select: none;
+    }
+
+    body {
+      background: #000;
+      width: 100vw;
+      height: 100dvh;
+      overflow: hidden;
+      font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+      color: white;
+    }
+
+    /* ── Kamera ── */
+    #camera {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    /* ── Vorlage (Overlay-Bild) ── */
+    #overlay-wrap {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    #overlay-image {
+      max-width: 100%;
+      max-height: 100%;
+      display: none;
+      opacity: 0.5;
+      transform-origin: center center;
+      touch-action: none;
+      pointer-events: auto;
+      will-change: transform;
+    }
+
+    /* ── Raster ── */
+    #grid-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      display: none;
+      z-index: 3;
+    }
+
+    /* ── Startbildschirm ── */
+    #start-screen {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0, 0, 0, 0.92);
+      z-index: 20;
+      gap: 10px;
+      padding: 30px;
+    }
+
+    .start-logo {
+      font-size: 3.5em;
+      margin-bottom: 6px;
+    }
+
+    .start-title {
+      font-size: 1.8em;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+
+    .start-sub {
+      font-size: 0.9em;
+      color: #888;
+      text-align: center;
+      line-height: 1.5;
+      margin-bottom: 20px;
+    }
+
+    .start-btn {
+      background: #0A84FF;
+      color: white;
+      border: none;
+      border-radius: 14px;
+      padding: 16px 32px;
+      font-size: 1.05em;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      max-width: 280px;
+    }
+
+    .start-version {
+      margin-top: 28px;
+      font-size: 0.7em;
+      color: #444;
+      text-align: center;
+      line-height: 1.6;
+    }
+
+    /* ── Hinweis wenn kein Bild geladen ── */
+    #no-image-hint {
+      position: absolute;
+      top: 45%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 0.95em;
+      line-height: 1.6;
+      pointer-events: none;
+      z-index: 4;
+    }
+
+    /* ── Steuerleiste ── */
+    #controls {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: rgba(18, 18, 20, 0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-top: 1px solid rgba(255, 255, 255, 0.08);
+      padding: 14px 16px;
+      padding-bottom: calc(14px + env(safe-area-inset-bottom));
+      z-index: 10;
+      transition: transform 0.3s ease;
+    }
+
+    #controls.hidden {
+      transform: translateY(calc(100% - 44px));
+    }
+
+    /* ── Anfasser zum Ein-/Ausklappen ── */
+    #toggle-controls {
+      position: absolute;
+      top: -38px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(18, 18, 20, 0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-bottom: none;
+      border-radius: 10px 10px 0 0;
+      padding: 6px 20px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    #toggle-controls .handle-bar {
+      width: 32px;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.3);
+      border-radius: 2px;
+    }
+
+    #toggle-arrow {
+      font-size: 0.65em;
+      color: rgba(255, 255, 255, 0.4);
+      margin-top: 1px;
+    }
+
+    /* ── Button-Reihe ── */
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .btn {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      color: white;
+      border-radius: 11px;
+      padding: 9px 4px 8px;
+      font-size: 0.72em;
+      font-weight: 500;
+      cursor: pointer;
+      text-align: center;
+      line-height: 1.3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+    }
+
+    .btn.active {
+      background: #0A84FF;
+      border-color: #0A84FF;
+    }
+
+    .btn-icon {
+      font-size: 1.5em;
+      line-height: 1;
+    }
+
+    /* ── Slider ── */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .slider-label {
+      font-size: 0.75em;
+      color: #888;
+      white-space: nowrap;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.2);
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #0A84FF;
+      cursor: pointer;
+      box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.25);
+    }
+
+    .slider-val {
+      font-size: 0.75em;
+      color: #aaa;
+      min-width: 34px;
+      text-align: right;
+    }
+
+    /* ── Versions-Info ── */
+    #version-info {
+      position: absolute;
+      top: calc(10px + env(safe-area-inset-top));
+      right: 14px;
+      font-size: 0.6em;
+      color: rgba(255, 255, 255, 0.2);
+      text-align: right;
+      z-index: 5;
+      line-height: 1.5;
+      pointer-events: none;
+    }
+
+    #file-input { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- Startbildschirm -->
+  <div id="start-screen">
+    <div class="start-logo">👁</div>
+    <div class="start-title">UliTrace</div>
+    <div class="start-sub">
+      Stelle dein iPhone über das Zeichenpapier.<br>
+      Lade dann deine Vorlage – und zeichne nach.
+    </div>
+    <button class="start-btn" onclick="startCamera()">Kamera starten</button>
+    <div class="start-version">
+      Version 1.0 · 06. Mai 2026<br>
+      Erstellt von Ulrike Günther
+    </div>
+  </div>
+
+  <!-- Kamera -->
+  <video id="camera" autoplay playsinline muted></video>
+
+  <!-- Raster -->
+  <svg id="grid-overlay" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <pattern id="smallGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+        <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.15)" stroke-width="0.5"/>
+      </pattern>
+      <pattern id="bigGrid" width="200" height="200" patternUnits="userSpaceOnUse">
+        <rect width="200" height="200" fill="url(#smallGrid)"/>
+        <path d="M 200 0 L 0 0 0 200" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+      </pattern>
+    </defs>
+    <rect width="100%" height="100%" fill="url(#bigGrid)"/>
+  </svg>
+
+  <!-- Overlay-Bild -->
+  <div id="overlay-wrap">
+    <img id="overlay-image" src="" alt="Vorlage" draggable="false">
+  </div>
+
+  <!-- Hinweis -->
+  <div id="no-image-hint">
+    📂 Tippe auf „Bild laden"<br>um deine Vorlage auszuwählen
+  </div>
+
+  <!-- Versionsinfo -->
+  <div id="version-info">
+    UliTrace 1.0 · Ulrike Günther
+  </div>
+
+  <!-- Steuerleiste -->
+  <div id="controls">
+    <div id="toggle-controls" onclick="toggleControls()">
+      <div class="handle-bar"></div>
+      <div id="toggle-arrow">▲ Steuerung</div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn" onclick="document.getElementById('file-input').click()">
+        <span class="btn-icon">🖼️</span>Bild laden
+      </button>
+      <button class="btn" id="grid-btn" onclick="toggleGrid()">
+        <span class="btn-icon">⊞</span>Raster
+      </button>
+      <button class="btn" onclick="zoomStep(1.2)">
+        <span class="btn-icon">🔍</span>Größer
+      </button>
+      <button class="btn" onclick="zoomStep(1/1.2)">
+        <span class="btn-icon">🔎</span>Kleiner
+      </button>
+      <button class="btn" onclick="resetAll()">
+        <span class="btn-icon">↺</span>Reset
+      </button>
+    </div>
+
+    <div class="slider-row">
+      <span class="slider-label">Transparenz</span>
+      <input type="range" id="opacity-slider" min="0" max="100" value="50"
+             oninput="setOpacity(this.value)">
+      <span class="slider-val" id="opacity-val">50%</span>
+    </div>
+  </div>
+
+  <input type="file" id="file-input" accept="image/*" onchange="loadImage(this)">
+
+  <script>
+    // ── Zustand ──────────────────────────────────────────────
+    let zoom       = 1;
+    let posX       = 0;
+    let posY       = 0;
+    let gridOn     = false;
+    let ctrlOpen   = true;
+
+    // Drag-Zustand
+    let dragging   = false;
+    let dragStartX, dragStartY, posStartX, posStartY;
+
+    // Pinch-Zustand
+    let pinchDist  = null;
+    let pinchMidX, pinchMidY;
+    let posAtPinchX, posAtPinchY;
+    let zoomAtPinch;
+
+    const img      = document.getElementById('overlay-image');
+    const grid     = document.getElementById('grid-overlay');
+    const hint     = document.getElementById('no-image-hint');
+    const opVal    = document.getElementById('opacity-val');
+    const arrow    = document.getElementById('toggle-arrow');
+
+    // ── Kamera starten ───────────────────────────────────────
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' },
+          audio: false
+        });
+        document.getElementById('camera').srcObject = stream;
+        document.getElementById('start-screen').style.display = 'none';
+      } catch (e) {
+        alert('Kamera konnte nicht gestartet werden.\n\n' + e.message);
+      }
+    }
+
+    // ── Bild laden ───────────────────────────────────────────
+    function loadImage(input) {
+      if (!input.files || !input.files[0]) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        img.src = e.target.result;
+        img.style.display = 'block';
+        hint.style.display = 'none';
+        resetAll();
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+
+    // ── Transparenz ──────────────────────────────────────────
+    function setOpacity(val) {
+      img.style.opacity = val / 100;
+      opVal.textContent = val + '%';
+    }
+
+    // ── Raster ───────────────────────────────────────────────
+    function toggleGrid() {
+      gridOn = !gridOn;
+      grid.style.display = gridOn ? 'block' : 'none';
+      document.getElementById('grid-btn').classList.toggle('active', gridOn);
+    }
+
+    // ── Zoom per Knopf ───────────────────────────────────────
+    function zoomStep(factor) {
+      zoom = Math.min(Math.max(zoom * factor, 0.15), 8);
+      applyTransform();
+    }
+
+    // ── Alles zurücksetzen ───────────────────────────────────
+    function resetAll() {
+      zoom = 1; posX = 0; posY = 0;
+      applyTransform();
+    }
+
+    // ── Transform anwenden ───────────────────────────────────
+    function applyTransform() {
+      img.style.transform = `translate(${posX}px, ${posY}px) scale(${zoom})`;
+    }
+
+    // ── Steuerleiste ein-/ausklappen ─────────────────────────
+    function toggleControls() {
+      ctrlOpen = !ctrlOpen;
+      document.getElementById('controls').classList.toggle('hidden', !ctrlOpen);
+      arrow.textContent = ctrlOpen ? '▲ Steuerung' : '▼ Steuerung';
+    }
+
+    // ── Touch-Gesten (Drag + Pinch) ──────────────────────────
+    function getTouchDist(t) {
+      const dx = t[0].clientX - t[1].clientX;
+      const dy = t[0].clientY - t[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    function getTouchMid(t) {
+      return {
+        x: (t[0].clientX + t[1].clientX) / 2,
+        y: (t[0].clientY + t[1].clientY) / 2
+      };
+    }
+
+    // Touch-Events direkt auf dem Bild
+    img.addEventListener('touchstart', e => {
+      e.preventDefault();
+      if (e.touches.length === 1) {
+        dragging   = true;
+        dragStartX = e.touches[0].clientX;
+        dragStartY = e.touches[0].clientY;
+        posStartX  = posX;
+        posStartY  = posY;
+        pinchDist  = null;
+      } else if (e.touches.length === 2) {
+        dragging     = false;
+        pinchDist    = getTouchDist(e.touches);
+        const mid    = getTouchMid(e.touches);
+        pinchMidX    = mid.x;
+        pinchMidY    = mid.y;
+        posAtPinchX  = posX;
+        posAtPinchY  = posY;
+        zoomAtPinch  = zoom;
+      }
+    }, { passive: false });
+
+    img.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (e.touches.length === 1 && dragging) {
+        posX = posStartX + (e.touches[0].clientX - dragStartX);
+        posY = posStartY + (e.touches[0].clientY - dragStartY);
+        applyTransform();
+      } else if (e.touches.length === 2 && pinchDist !== null) {
+        const newDist = getTouchDist(e.touches);
+        const ratio   = newDist / pinchDist;
+        zoom          = Math.min(Math.max(zoomAtPinch * ratio, 0.15), 8);
+        // Bild zur Pinch-Mitte hin skalieren
+        const mid     = getTouchMid(e.touches);
+        posX          = mid.x - (pinchMidX - posAtPinchX) * ratio;
+        posY          = mid.y - (pinchMidY - posAtPinchY) * ratio;
+        applyTransform();
+      }
+    }, { passive: false });
+
+    img.addEventListener('touchend', () => {
+      dragging  = false;
+      pinchDist = null;
+    });
+
+    // ── Service Worker registrieren (für Offline-Nutzung) ────
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
