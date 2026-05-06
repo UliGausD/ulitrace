@@ -1,4 +1,4 @@
-const CACHE = 'ulitrace-v1.0';
+const CACHE = 'ulitrace-v1.1';
 const FILES = ['./index.html', './manifest.json', './icon.svg'];
 
 self.addEventListener('install', e => {
